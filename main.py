@@ -2,19 +2,18 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import os
-import smtplib
+import datetime
 from email.mime.text import MIMEText
+import os
+import time
+import smtplib
 from sqlalchemy import between, create_engine, engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm.session import Session, sessionmaker
 from sqlalchemy.schema import Column, ForeignKey, MetaData
 from sqlalchemy.types import String, Integer, Date
-import datetime
-import time
 import settings
-from ipdb import set_trace
 
 __author__ = 'Nico den Boer'
 
@@ -69,10 +68,10 @@ class SpecialDays(object):
         # build query
         query_a = session.query(Birthday.date, Birthday.descr)
         query_a = query_a.filter(BirthdaySubscription.user_id==user_id)
-#        query_a = query_a.filter(Birthday.date.between(date_from, date_to))
+        query_a = query_a.filter(Birthday.date.between(date_from, date_to))
 
         query_b = session.query(SpecialDay.date, SpecialDay.descr)
-#        query_b = query_b.filter(SpecialDay.date.between(date_from, date_to))
+        query_b = query_b.filter(SpecialDay.date.between(date_from, date_to))
 
         query = query_a.union(query_b)
         query = query.order_by('1') # order by date column
