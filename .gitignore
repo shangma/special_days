@@ -1,0 +1,8 @@
+*.pyc
+.idea
+data.sq3
+readme.txt
+settings.for.me.py
+settings_github.py
+test.output.txt
+
