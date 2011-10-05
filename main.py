@@ -46,7 +46,11 @@ class SpecialDays(object):
             return
         engine = create_engine('sqlite://' + settings.DATABASE_NAME, echo=settings.DATABASE_ECHO)
         self.Session = sessionmaker(bind=engine) # for creating the database
-        if settings.DATABASE_NAME and not os.path.exists(settings.DATABASE_NAME[1:]):
+        if not settings.DATABASE_NAME:
+            # for testing in memory
+            Base.metadata.create_all(engine)
+        elif settings.DATABASE_NAME and not os.path.exists(settings.DATABASE_NAME[1:]):
+            # production use
             Base.metadata.create_all(engine)
         self.is_open = True
 #        User.create(engine)
@@ -56,6 +60,8 @@ class SpecialDays(object):
 
     def _send_email(self, user_id, email):
         print 'Now processing %s' % email
+        self._update_data()
+        return
 
         now = datetime.datetime.now()
         dt = datetime.date(year=now.year, month=now.month, day=now.day)
@@ -113,6 +119,36 @@ class SpecialDays(object):
             s.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
         s.sendmail(settings.EMAIL_SENDER, email, msg.as_string())
         s.quit()
+
+    def _update_data(self):
+        """Update dates which are in the past, so they will reoccur in the future"""
+        now = datetime.datetime.now()
+        dt = datetime.date(year=now.year, month=now.month, day=now.day)
+        date_to = dt - datetime.timedelta(days = settings.QUERY_FROM_DELTA)
+
+        self._open_database()
+        session = self.Session()
+
+        # build query for birthdays and update data
+        query = session.query(Birthday)
+        query = query.filter(Birthday.date < date_to)
+        for record in query.all():
+            print record
+            date_old = record.date
+            date_new = datetime.date(year=now.year + 1, month=date_old.month, day=date_old.day)
+            record.date = date_new
+            session.add(record)
+
+        # build query for special days and update data
+        query = session.query(SpecialDay)
+        query = query.filter(SpecialDay.date < date_to)
+        for record in query.all():
+            date_old = record.date
+            date_new = datetime.date(year=now.year + 1, month=date_old.month, day=date_old.day)
+            record.date = date_new
+            session.add(record)
+
+        session.commit()
 
     def add_user(self, name, email):
         """Method add a users.

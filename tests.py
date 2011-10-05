@@ -16,9 +16,15 @@ class TestFunctions(unittest.TestCase):
         cls.add_special_day('15-04-2011', 'National event, something important')
 
     def test_list_tables(self):
+        cls.list_users()
         cls.list_birthdays()
         cls.list_special_days()
-        cls.list_users()
+
+    def test_update_data(self):
+        cls.send_emails()
+        cls.list_birthdays()
+        cls.list_special_days()
+
 
 """
 For manual testing:
