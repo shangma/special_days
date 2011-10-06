@@ -4,6 +4,7 @@
 import argparse
 import datetime
 from email.mime.text import MIMEText
+from email import Utils
 import os
 import time
 import smtplib
@@ -18,9 +19,20 @@ import settings
 __author__ = 'Nico den Boer'
 
 class SpecialDays(object):
-    """Class which handles the commands entered though the console"""
+    """Class which handles the commands entered though the console
+
+    Interesting links to find national holidays:
+
+    The Netherlands:
+    - http://www.feestdagen.nl
+
+    Czech republic:
+    - http://cs.wikipedia.org/wiki/Český_státní_svátek
+    - http://www.doprava.vpraxi.cz/statni_svatky_evropa.html
+
+    """
     is_open = False
-    datestring = '%d-%m-%Y'
+    DATESTRING = '%d-%m-%Y'
 
     def _convert_date_string(self, date):
         """Internal method to convert a date string to a date object. If the format is incorrect, it will return None"""
@@ -28,7 +40,7 @@ class SpecialDays(object):
         dt = None
         try:
             # http://docs.python.org/library/time.html#time.strptime
-            tm = time.strptime(date, self.datestring)
+            tm = time.strptime(date, self.DATESTRING)
             dt = datetime.date(year=tm.tm_year, month=tm.tm_mon, day=tm.tm_mday)
         except TypeError, e:
             print e.args
@@ -60,8 +72,6 @@ class SpecialDays(object):
 
     def _send_email(self, user_id, email):
         print 'Now processing %s' % email
-        self._update_data()
-        return
 
         now = datetime.datetime.now()
         dt = datetime.date(year=now.year, month=now.month, day=now.day)
@@ -89,7 +99,7 @@ class SpecialDays(object):
             i += 1
             dt = datetime.datetime(year=record.date.year, month=record.date.month, day=record.date.day)
             sort_field = dt.strftime('%Y%m%d-') + str(i)
-            events[sort_field] = '%s - %s' % (dt.strftime(self.datestring), record.descr)
+            events[sort_field] = '%s - %s' % (dt.strftime(self.DATESTRING), record.descr)
 
         if not events:
             # nothing to do...
@@ -107,9 +117,11 @@ class SpecialDays(object):
 
         # Create email
         msg = MIMEText("\n".join(body))
-        msg['Subject'] = 'Upcoming important days'
+        msg['Date'] = Utils.formatdate(localtime = 1)
+        msg['Subject'] = settings.EMAIL_SUBJECT
         msg['From'] = settings.EMAIL_SENDER
         msg['To'] = email
+        msg['Message-ID'] = Utils.make_msgid()
         # Send the message via our own SMTP server, but don't include the envelope header.
         s = smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT)
         if settings.SMTP_TLS:
@@ -119,6 +131,8 @@ class SpecialDays(object):
             s.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
         s.sendmail(settings.EMAIL_SENDER, email, msg.as_string())
         s.quit()
+
+        # Need a fake email server for testing? See http://www.lastcraft.com/fakemail.php
 
     def _update_data(self):
         """Update dates which are in the past, so they will reoccur in the future"""
@@ -250,7 +264,7 @@ class SpecialDays(object):
         if user_input == 'e':
             # Get and validate user input
             dt = datetime.datetime(year=birthday.date.year, month=birthday.date.month, day=birthday.date.day)
-            old_date = dt.strftime(self.datestring)
+            old_date = dt.strftime(self.DATESTRING)
 
             print 'Current value: %s ' % old_date
             new_date = self._convert_date_string(raw_input('$ '))
@@ -292,7 +306,7 @@ class SpecialDays(object):
         if user_input == 'e':
             # Get and validate user input
             dt = datetime.datetime(year=special_day.date.year, month=special_day.date.month, day=special_day.date.day)
-            old_date = dt.strftime(self.datestring)
+            old_date = dt.strftime(self.DATESTRING)
 
             print 'Current value: %s ' % old_date
             new_date = self._convert_date_string(raw_input('$ '))
@@ -358,11 +372,13 @@ class SpecialDays(object):
         for record in session.query(User).order_by(User.id):
             print record
 
-    def list_birthdays(self):
+    def list_birthdays(self, subscriptions):
         self._open_database()
         session = self.Session()
         for record in session.query(Birthday).order_by(Birthday.date):
             print record
+            if not subscriptions:
+                continue
             print '- Subscriptions:'
             for dy, usr in session.query(BirthdaySubscription, User).filter(BirthdaySubscription.user_id==User.id).filter_by(birthday_id=record.id).order_by(User.id):
                 # used  "direct join" or 'Cartesian product' here.
@@ -401,6 +417,7 @@ class SpecialDays(object):
         session = self.Session()
         for record in session.query(User).all():
             self._send_email(record.id, record.email)
+        self._update_data()
 
 
 Base = declarative_base()
@@ -420,12 +437,12 @@ class Birthday(Base):
     """Class which represents the birthdays table"""
     __tablename__ = 'birthdays'
     id = Column(Integer, primary_key=True)
-    date = Column(Date(10))
-    descr = Column(String(50))
+    date = Column(Date())
+    descr = Column(String(240))
 
     def __repr__(self):
         """String representation of record while using print <instance>"""
-        return "<Birthday('%s: %s' - '%s')>" % (self.id, self.date, self.descr)
+        return "<Birthday('%s: %s' - '%s')>" % (self.id, self.date.strftime(SpecialDays.DATESTRING), self.descr)
 
 
 class BirthdaySubscription(Base):
@@ -440,12 +457,12 @@ class SpecialDay(Base):
     """Class which represents the table special_days"""
     __tablename__ = 'special_days'
     id = Column(Integer, primary_key=True)
-    date = Column(Date(10))
-    descr = Column(String(50))
+    date = Column(Date())
+    descr = Column(String(240))
 
     def __repr__(self):
         """String representation of record while using print <instance>"""
-        return "<Special day('%s: %s' - '%s')>" % (self.id, self.date, self.descr)
+        return "<Special day('%s: %s' - '%s')>" % (self.id, self.date.strftime(SpecialDays.DATESTRING), self.descr)
 
 
 def main():
@@ -492,7 +509,10 @@ def main():
     cmd.add_argument('id', help='ID of subscription')
 
     cmd = subparsers.add_parser('list-users', help='List users')
+
     cmd = subparsers.add_parser('list-birthdays', help='List birthdays')
+    cmd.add_argument('--subscriptions', help='Include subscriptions', action = 'store_true')
+
     cmd = subparsers.add_parser('list-special-days', help='List special days')
 
     cmd = subparsers.add_parser('send-emails', help='Send emails to users')
@@ -512,7 +532,7 @@ def main():
         print "-- end insertion test data --\n\n"
 
     if args.command == 'add-user':
-        cls.add_user(args.name[:-1], args.email)
+        cls.add_user(args.name, args.email)
     elif args.command == 'add-birthday':
         cls.add_birthday(args.date[:-1], args.description, args.users)
     elif args.command == 'add-special-day':
@@ -530,7 +550,7 @@ def main():
     elif args.command == 'list-users':
         cls.list_users()
     elif args.command == 'list-birthdays':
-        cls.list_birthdays()
+        cls.list_birthdays(args.subscriptions)
     elif args.command == 'list-special-days':
         cls.list_special_days()
     elif args.command == 'send-emails':
