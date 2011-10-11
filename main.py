@@ -83,7 +83,8 @@ class SpecialDays(object):
 
         # build query
         query_a = session.query(Birthday.date, Birthday.descr)
-        query_a = query_a.filter(BirthdaySubscription.user_id==user_id)
+        query_a = query_a.filter(BirthdaySubscription.birthday_id == Birthday.id)
+        query_a = query_a.filter(BirthdaySubscription.user_id == user_id)
         query_a = query_a.filter(Birthday.date.between(date_from, date_to))
 
         query_b = session.query(SpecialDay.date, SpecialDay.descr)
