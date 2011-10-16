@@ -8,12 +8,11 @@ from email import Utils
 import os
 import time
 import smtplib
-from sqlalchemy import between, create_engine, engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import aliased
-from sqlalchemy.orm.session import Session, sessionmaker
-from sqlalchemy.schema import Column, ForeignKey, MetaData
-from sqlalchemy.types import String, Integer, Date
+from sqlalchemy import between, create_engine, engine
+#from sqlalchemy.orm import aliased
+from sqlalchemy.orm.session import sessionmaker
+from model import *
 import settings
 
 __author__ = 'Nico den Boer'
@@ -32,7 +31,6 @@ class SpecialDays(object):
 
     """
     is_open = False
-    DATESTRING = '%d-%m-%Y'
 
     def _convert_date_string(self, date):
         """Internal method to convert a date string to a date object. If the format is incorrect, it will return None"""
@@ -40,7 +38,7 @@ class SpecialDays(object):
         dt = None
         try:
             # http://docs.python.org/library/time.html#time.strptime
-            tm = time.strptime(date, self.DATESTRING)
+            tm = time.strptime(date, settings.DATESTRING)
             dt = datetime.date(year=tm.tm_year, month=tm.tm_mon, day=tm.tm_mday)
         except TypeError, e:
             print e.args
@@ -60,6 +58,7 @@ class SpecialDays(object):
         self.Session = sessionmaker(bind=engine) # for creating the database
         if not settings.DATABASE_NAME:
             # for testing in memory
+#            Base = declarative_base()
             Base.metadata.create_all(engine)
         elif settings.DATABASE_NAME and not os.path.exists(settings.DATABASE_NAME[1:]):
             # production use
@@ -100,7 +99,7 @@ class SpecialDays(object):
             i += 1
             dt = datetime.datetime(year=record.date.year, month=record.date.month, day=record.date.day)
             sort_field = dt.strftime('%Y%m%d-') + str(i)
-            events[sort_field] = '%s - %s' % (dt.strftime(self.DATESTRING), record.descr)
+            events[sort_field] = '%s - %s' % (dt.strftime(settings.DATESTRING), record.descr)
 
         if not events:
             # nothing to do...
@@ -265,7 +264,7 @@ class SpecialDays(object):
         if user_input == 'e':
             # Get and validate user input
             dt = datetime.datetime(year=birthday.date.year, month=birthday.date.month, day=birthday.date.day)
-            old_date = dt.strftime(self.DATESTRING)
+            old_date = dt.strftime(settings.DATESTRING)
 
             print 'Current value: %s ' % old_date
             new_date = self._convert_date_string(raw_input('$ '))
@@ -307,7 +306,7 @@ class SpecialDays(object):
         if user_input == 'e':
             # Get and validate user input
             dt = datetime.datetime(year=special_day.date.year, month=special_day.date.month, day=special_day.date.day)
-            old_date = dt.strftime(self.DATESTRING)
+            old_date = dt.strftime(settings.DATESTRING)
 
             print 'Current value: %s ' % old_date
             new_date = self._convert_date_string(raw_input('$ '))
@@ -419,52 +418,6 @@ class SpecialDays(object):
         for record in session.query(User).all():
             self._send_email(record.id, record.email)
         self._update_data()
-
-
-Base = declarative_base()
-class User(Base):
-    """Class which represents the users table"""
-    __tablename__ = 'users'
-    id = Column(Integer, primary_key=True)
-    name = Column(String(50), default='', nullable=True)
-    email = Column(String(50), default='')
-
-    def __repr__(self):
-        """String representation of record while using print <instance>"""
-        return "<User('%s: %s' - '%s')>" % (self.id, self.name, self.email)
-
-
-class Birthday(Base):
-    """Class which represents the birthdays table"""
-    __tablename__ = 'birthdays'
-    id = Column(Integer, primary_key=True)
-    date = Column(Date())
-    descr = Column(String(240))
-
-    def __repr__(self):
-        """String representation of record while using print <instance>"""
-        return "<Birthday('%s: %s' - '%s')>" % (self.id, self.date.strftime(SpecialDays.DATESTRING), self.descr)
-
-
-class BirthdaySubscription(Base):
-    """Class which represents the table birthday_subscriptions"""
-    __tablename__ = 'birthday_subscriptions'
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    birthday_id = Column(Integer, ForeignKey('birthdays.id'))
-
-
-class SpecialDay(Base):
-    """Class which represents the table special_days"""
-    __tablename__ = 'special_days'
-    id = Column(Integer, primary_key=True)
-    date = Column(Date())
-    descr = Column(String(240))
-
-    def __repr__(self):
-        """String representation of record while using print <instance>"""
-        return "<Special day('%s: %s' - '%s')>" % (self.id, self.date.strftime(SpecialDays.DATESTRING), self.descr)
-
 
 def main():
     descr = []
