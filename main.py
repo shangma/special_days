@@ -89,7 +89,10 @@ class SpecialDays(object):
         query_b = session.query(SpecialDay.date, SpecialDay.descr)
         query_b = query_b.filter(SpecialDay.date.between(date_from, date_to))
 
-        query = query_a.union(query_b)
+        query_c = session.query(Appointment.date, Appointment.descr)
+        query_c = query_c.filter(Appointment.date.between(date_from, date_to))
+
+        query = query_a.union(query_b).union(query_c)
         query = query.order_by('1') # order by date column
 
         events = {}
@@ -419,6 +422,77 @@ class SpecialDays(object):
             self._send_email(record.id, record.email)
         self._update_data()
 
+    def add_appointmen(self, date, descr):
+        """Method add an appointment.
+         Pre-condition; required parameters. The command line parser has already validated that.
+
+         """
+
+        self._open_database()
+        dt = self._convert_date_string(date)
+        if not dt:
+            return
+
+        session = self.Session()
+
+        # add appointment itself
+        day = Appointment()
+        day.date = dt
+        day.descr = descr
+        session.add(day)
+
+        session.commit()
+
+        for instance in session.query(Appointment).filter_by(id=day.id):
+            print 'Added: %s' % instance
+
+    def edit_appointment(self, id):
+        self._open_database()
+        session = self.Session()
+        appointment = session.query(Appointment).filter_by(id=id).first()
+        if not appointment:
+            print 'Appointment does not exist. Check ID and try again'
+            return
+
+        # Check if we can continue
+        print 'You are going to edit the following record:'
+        print appointment
+        print 'What would you now like to do?'
+        print 'Press e to edit, d to delete and q to quit (e/d/q)'
+        user_input = raw_input()
+        if user_input == 'e':
+            # Get and validate user input
+            dt = datetime.datetime(year=appointment.date.year, month=appointment.date.month, day=appointment.date.day)
+            old_date = dt.strftime(settings.DATESTRING)
+
+            print 'Current value: %s ' % old_date
+            new_date = self._convert_date_string(raw_input('$ '))
+            if not new_date:
+                new_date = appointment.date
+
+            print 'Current value: %s ' % appointment.descr
+            new_desc = raw_input('$ ')
+            if not new_desc:
+                new_desc = appointment.descr
+
+            # Store information
+            appointment.date = new_date
+            appointment.descr = new_desc
+            session.add(appointment)
+        elif user_input == 'd':
+            session.delete(appointment)
+        else:
+            return
+
+        session.commit()
+
+    def list_appointments(self):
+        self._open_database()
+        session = self.Session()
+        for record in session.query(Appointment).order_by(Appointment.date):
+            print record
+
+
 def main():
     descr = []
     descr.append('A little program to remind you of special days; birthdays and other special days.')
@@ -427,28 +501,32 @@ def main():
     parser = argparse.ArgumentParser(prog='special_days', description="\n".join(descr))
     subparsers = parser.add_subparsers(dest = 'command')
 
-    cmd = subparsers.add_parser('add-user', help='Add a user')
-    cmd.add_argument('name', help='<First name> <last name>')
-    cmd.add_argument('email', help='Valid please')
-
-    cmd = subparsers.add_parser('add-special-day', help='Add a national holiday')
+    cmd = subparsers.add_parser('add-appointment', help='Add an appointment')
     cmd.add_argument('date', help='Format: dd-mm-yyyy')
-    cmd.add_argument('description', help='Description of national holiday')
+    cmd.add_argument('description', help='Description')
 
     cmd = subparsers.add_parser('add-birthday', help='Add a birthday')
     cmd.add_argument('date', help='Format: dd-mm-yyyy')
     cmd.add_argument('description', help='Name of person')
     cmd.add_argument('users', help='ID of user - or comma delimited list of users - who should receive an email')
 
+    cmd = subparsers.add_parser('add-special-day', help='Add a national holiday')
+    cmd.add_argument('date', help='Format: dd-mm-yyyy')
+    cmd.add_argument('description', help='Description of national holiday')
+
     cmd = subparsers.add_parser('add-subscription', help='Add a subscription to a birthday')
     cmd.add_argument('user_id', help='ID of user')
     cmd.add_argument('birthday_id', help='ID of birthday')
 
+    cmd = subparsers.add_parser('add-user', help='Add a user')
+    cmd.add_argument('name', help='<First name> <last name>')
+    cmd.add_argument('email', help='Valid please')
+
     # if you just want to check if an option is entered (will store a bool value to the option):
 #    cmd.add_argument('--display-processed', action = 'store_true')
 
-    cmd = subparsers.add_parser('edit-user', help='Edit a user')
-    cmd.add_argument('id', help='ID of user')
+    cmd = subparsers.add_parser('edit-appointment', help='Edit an appointment')
+    cmd.add_argument('id', help='ID of appointment')
 
     descr = []
     descr.append('Edit a birthday. ')
@@ -456,18 +534,23 @@ def main():
     cmd = subparsers.add_parser('edit-birthday', help="\n".join(descr))
     cmd.add_argument('id', help='ID of birthday')
 
-    cmd = subparsers.add_parser('edit-special-day', help='Edit a special day')
+    cmd = subparsers.add_parser('edit-special-day', help='Edit a national holiday')
     cmd.add_argument('id', help='ID of special day')
+
+    cmd = subparsers.add_parser('edit-user', help='Edit a user')
+    cmd.add_argument('id', help='ID of user')
 
     cmd = subparsers.add_parser('delete-subscription', help='Delete a subscription to a birthday')
     cmd.add_argument('id', help='ID of subscription')
 
-    cmd = subparsers.add_parser('list-users', help='List users')
+    cmd = subparsers.add_parser('list-appointments', help='List appointments')
 
     cmd = subparsers.add_parser('list-birthdays', help='List birthdays')
     cmd.add_argument('--subscriptions', help='Include subscriptions', action = 'store_true')
 
     cmd = subparsers.add_parser('list-special-days', help='List special days')
+
+    cmd = subparsers.add_parser('list-users', help='List users')
 
     cmd = subparsers.add_parser('send-emails', help='Send emails to users')
     cmd.add_argument('--user_id', help='ID of user')
@@ -488,7 +571,7 @@ def main():
     if args.command == 'add-user':
         cls.add_user(args.name, args.email)
     elif args.command == 'add-birthday':
-        cls.add_birthday(args.date[:-1], args.description, args.users)
+        cls.add_birthday(args.date, args.description, args.users)
     elif args.command == 'add-special-day':
         cls.add_special_day(args.date, args.description)
     elif args.command == 'add-subscription':
