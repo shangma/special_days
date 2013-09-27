@@ -55,16 +55,6 @@ Enter and update data from the console.
 
 
 Todo
-============
+====
 
 * Suggestions are welcome
-
-
-Other than that
-===============
-
-I am currently looking for `freelance`_ Python and Django projects. We also provide training for Python and Django, both in `Holland`_ and the `Czech republic`_.
-
-.. _`freelance`: http://www.denboer-ims.nl/freelance_programmer.html
-.. _`Holland`: http://www.denboer-ims.nl/cursus_python.html
-.. _`Czech republic`: http://www.nicodenboer.com/python-skoleni.html
